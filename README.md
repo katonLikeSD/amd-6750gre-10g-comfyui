@@ -28,7 +28,7 @@ cd ~/ComfyUI && python3 main.py --fp32-vae
 > **遇到"必过参数突然 OOM"先重启 ComfyUI 再降参数**——ROCm 显存碎片会污染后续测试（连续几次 OOM 后，正常参数也会假 OOM）。
 
 > [!TIP]
-> **SDXL 图片生成（novaAnimeXL，2026-10-07 补回实测）**：1024×1024 × 30 步 ≈ **36s/张**（约 1.2s/it），采样峰值 **7.3GB / 10GB**，用默认 `VAEDecode`（untiled）即可——顶部两条 CAUTION 只针对 Wan 视频 VAE，别给 SDXL 工作流套 tile 参数。详见 [docs/sdxl-novaanimexl-test.md](docs/sdxl-novaanimexl-test.md)。
+> **SDXL 图片生成（novaAnimeXL，2026-10-07 补回实测，18 次生成）**：1024×1024 **15 步 ≈ 20s/张**（画质干净）、30 步 ≈ 40s；稳态 ≈1.17s/it 对采样器/cfg 不敏感；untiled 解码实测上限 **1536×1536（峰值 9.15GB）**——顶部两条 CAUTION 只针对 Wan 视频 VAE，别给 SDXL 套 tile 参数。**避开 1216×1824/1824×1216 bucket：本机必出纯黑（静默失败）**。详见 [docs/sdxl-novaanimexl-test.md](docs/sdxl-novaanimexl-test.md)。
 
 ---
 
@@ -134,12 +134,12 @@ cd ~/ComfyUI && python3 main.py --fp32-vae
 
 | 类型 | 说明 |
 |---|---|
-| SDXL 系动漫 checkpoint | ✅ 已补回并实测（2026-10-07）：`novaAnimeXL_ilV190.safetensors`（6.9GB，自带双 CLIP+VAE，放 `models/checkpoints/`），见 [docs/sdxl-novaanimexl-test.md](docs/sdxl-novaanimexl-test.md) |
+| SDXL 系动漫 checkpoint | ✅ 已补回并实测（2026-10-07，18 次生成）：`novaAnimeXL_ilV190.safetensors`（6.9GB，自带双 CLIP+VAE，放 `models/checkpoints/`），15 步 20s / 30 步 40s @1024²，见 [docs/sdxl-novaanimexl-test.md](docs/sdxl-novaanimexl-test.md) |
 | Anima 动漫（qwen35-anima 节点 + Qwen3-0.6B 编码器 + qwen_image_vae） | 编码器/VAE 在位，checkpoint 缺失 |
 | Flux2 Klein GGUF fp8 | 缺失 |
 | clip_l / 各类风格 LoRA（SDXL/Illustrious 系 × 若干） | 在位（LoRA 属个人内容，不在示例中引用） |
 
-图片侧结论（**已实测，2026-10-07，novaAnimeXL**）：fp16 SDXL 1024×1024 30 步 ≈36s、峰值 7.3GB；832×1216 竖构图同样轻松通过；1MP 级 untiled `VAEDecode` 正常（与 Wan 视频 VAE 的崩溃行为不同）。原先"896×1152 内安全 / 1024×1536 需 tiled"的经验预测已被实测数据替换，完整矩阵见 [docs/sdxl-novaanimexl-test.md](docs/sdxl-novaanimexl-test.md)。
+图片侧结论（**已实测，2026-10-07，novaAnimeXL，18 次生成**）：稳态 ≈1.17s/it @1MP（dpmpp_2m / dpmpp_2m_sde / euler_ancestral 同速，cfg 5/7 同速）；1024² 15步≈20s、30步≈40s；untiled `VAEDecode` 实测到 1536×1536 正常（峰值 9.15GB），1024×1536/1152×1728 均过；batch2 @1024² 安全（8.15GB）。**例外：1216×1824 与 1824×1216 两个标准 bucket 本机必出纯黑**（形状级静默失败，换种子/采样器/tiled 解码均无效，规避用 1152×1728）。原先"896×1152 内安全 / 1024×1536 需 tiled"的经验预测已被实测数据替换，完整矩阵见 [docs/sdxl-novaanimexl-test.md](docs/sdxl-novaanimexl-test.md)。
 
 ---
 
@@ -201,6 +201,7 @@ UnetLoaderGGUF(Q4_K_M)─┘    steps=18 cfg=5.0          128/32/8/4 ←必改!
 14. **端口抢占**：kill 旧 ComfyUI 不彻底时，新进程 `Port 8188 already in use` 静默失败，测试全跑在旧配置上——本仓库测试就栽过一次（整轮"bf16 数据"实为 fp32）。**切换配置后必须验证 `ss -ltn` 归属 + 进程 cmdline**。
 15. **`pgrep -f "main.py"` 会匹配到执行它的 shell 自身**（自杀）；脚本里用 `pgrep -f "main[.]py"` 括号技巧规避。
 16. **awk 字符串比较把显存峰值读小一个数量级**（SDXL 测试新踩）：`awk '{if($2>m)m=$2}'` 对 `7406MB` 这类带单位字段走**字典序**，`"904MB" > "7406MB"`（'9'>'7'），整轮峰值被误报成 904MB——比空闲占用还低才发现不对。改用 Python 数值比较立刻正常。**shell 统计带单位字段先 `gsub` 剥掉非数字**。
+17. **`status=success` 会骗人——黑图静默失败**（SDXL 测试新踩）：1216×1824 bucket 采样 86s 正常跑完、无报错无 NaN 日志，输出却是**纯黑图**（mean=0, std=0），换种子/换采样器/tiled 解码全部复现。**任何生成测试驱动必须带亮度校验**（`mean<3` 判黑）——本仓库 Wan 版 `scripts/driver.py` 早有此检查，SDXL 新驱动初版没带，差点把黑图记成"通过"。
 
 ---
 
@@ -216,6 +217,7 @@ UnetLoaderGGUF(Q4_K_M)─┘    steps=18 cfg=5.0          128/32/8/4 ←必改!
 | WanVideoWrapper 直接加载 GGUF | ❌ 不支持 | 需另下其自有格式模型 |
 | SeedVR2 视频超分 | ❌ 排除 | 社区共识需 12GB+ 显存 |
 | comfy-kitchen triton 后端 | ⚠️ 自动禁用 | ImportError 回退，正常 |
+| SDXL `1216×1824` / `1824×1216` bucket | ❌ 必出纯黑 | 形状级静默失败（见踩坑 17），SDXL 官方标准桶之一；同比例改用 `1152×1728`（实测正常） |
 
 ---
 
@@ -259,9 +261,9 @@ python3 scripts/driver.py scripts/phase1_queue.jsonl
 │   ├── sdxl-novaanimexl-test.md  SDXL 图片生成实测（2026-10-07 新增）
 │   └── deepseek-discussion.md  与 DeepSeek 三轮协作分析纪要
 ├── workflows/           可直接导入的工作流 JSON ×2
-├── scripts/             driver.py + make_queue.py + sdxl_test_driver.py / sdxl_verify_vram.py + 全部测试队列 jsonl
-├── data/                原始测试结果 ~60 条 + sdxl_results.jsonl
-└── frames/              证据帧：花斑对比、链式衔接验证、SDXL 成品图 ×2
+├── scripts/             driver.py + make_queue.py + SDXL 测试驱动/探针 ×4 + 全部测试队列 jsonl
+├── data/                原始测试结果 ~60 条 + sdxl_results.jsonl（20 条）
+└── frames/              证据帧：花斑对比、链式衔接验证、SDXL 成品图 ×5（含黑图证据）
 ```
 
 ## 声明
