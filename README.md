@@ -18,7 +18,14 @@ cd ~/ComfyUI && python3 main.py --fp32-vae
 | 文本编码器 | `umt5_xxl_fp8` 挂 **CPU**（CLIPLoader device=cpu） |
 | 实测 | **244.5 秒/条**，采样峰值 **8.2GB / 10GB** |
 
-⚠️ **VAEDecodeTiled 默认参数（512/64/64/8）在这张卡上 100% OOM**（单块 fp32 激活 6.33GB），必须改成上表。
+> [!CAUTION]
+> **VAEDecodeTiled 默认参数（512/64/64/8）在这张卡上 100% OOM**（单个解码块 fp32 激活 6.33GB）。导入任何工作流后第一件事：把 tile 四项改成 `128 / 32 / 8 / 4`。
+
+> [!CAUTION]
+> **不要用 `VAEDecode`（untiled 整段解码）**——它不是 OOM 报错，而是直接触发 ROCm 硬崩溃（`Fatal Python error: Aborted / GPU core dump failed`），ComfyUI 整个进程死掉。
+
+> [!WARNING]
+> **遇到"必过参数突然 OOM"先重启 ComfyUI 再降参数**——ROCm 显存碎片会污染后续测试（连续几次 OOM 后，正常参数也会假 OOM）。
 
 ---
 
@@ -32,7 +39,7 @@ cd ~/ComfyUI && python3 main.py --fp32-vae
 | 显存 | 10.0 GB（`/sys/class/drm/card1/device/mem_info_vram_total`） |
 | CPU | AMD Ryzen 5 7500F（6核12线程，Zen4） |
 | 内存 | 32 GB（测试时可用 27 GB）+ 2 GB swap |
-| 磁盘 | NVMe，测试时剩余 20 GB |
+| 磁盘 | NVMe；**最低空间要求 ~30GB**（环境约 5G + 视频模型约 16G + 输出缓冲，见模型清单） |
 
 ### 操作系统与驱动
 
@@ -48,14 +55,15 @@ cd ~/ComfyUI && python3 main.py --fp32-vae
 | 包 | 版本 | 说明 |
 |---|---|---|
 | Python | 3.10.12 | 系统自带 |
-| **torch** | **2.5.1+rocm6.2** | 官方 ROCm wheel（自带 HIP 运行时，与系统 rocm-core 版本解耦） |
+| **torch** | **2.5.1+rocm6.2** | 官方 ROCm wheel（自带 HIP 运行时，与系统 rocm-core 解耦） |
 | torchvision / torchaudio | 0.20.1 / 2.5.1+rocm6.2 | 同 wheel 集 |
-| triton | 3.8.0 | pip 装的独立版，与 torch 2.5.1 不匹配 → **torch.compile 不可用** |
+| triton | 3.8.0 | 与 torch 2.5.1 **不匹配** → torch.compile 不可用（见"已知不可用"） |
 | numpy / pillow | 2.2.6 / 12.3.0 | |
 | gguf | 0.19.0 | GGUF 加载 |
 | av (PyAV) | 17.1.0 | **无 ffmpeg 二进制时的视频合成替代**（读帧/写 mp4） |
 | transformers / accelerate | 5.16.1 / 1.15.0 | |
 | einops / kornia / safetensors / scipy / aiohttp | 0.8.2 / 0.8.2 / 0.8.0 / 1.15.3 / 3.14.3 | ComfyUI 常规依赖 |
+| comfy-kitchen | 0.2.28 | triton 后端自动禁用，回退正常 |
 
 > 注意：**没有 xformers、没有 sage-attention、没有 flash-attention**——RDNA2 上这些要么不支持要么需重编译，实测 ComfyUI 自动走 PyTorch SDPA math 后端 + 内部分块（见"意外结论"）。
 
@@ -65,7 +73,6 @@ cd ~/ComfyUI && python3 main.py --fp32-vae
 |---|---|
 | ComfyUI | **0.37.2**（commit `830232b8`，2026-09-23） |
 | 前端 | comfyui_frontend_package **1.52.7** |
-| comfy-kitchen | 0.2.28（本卡上 triton 后端不可用，自动回退） |
 | 启动参数 | `--fp32-vae`（VAE 全精度；bf16 权衡见踩坑第 6 条） |
 
 **自定义节点**（ComfyUI-Manager 安装；zip 安装的无 git 版本记录）：
@@ -81,31 +88,55 @@ cd ~/ComfyUI && python3 main.py --fp32-vae
 | comfyui-qwen35-anima | Anima 动漫模型支持 | 图片侧 |
 | ComfyUI-SA-Nodes-QQ | 社区节点包 | 未使用 |
 
+### 安装命令（从零复现本环境）
+
+```bash
+# 1. 系统依赖 (Ubuntu 22.04)
+sudo apt install -y python3-pip git
+
+# 2. PyTorch ROCm 轮子（与 torch 2.5.1 对应的索引）
+pip3 install torch==2.5.1+rocm6.2 torchvision==0.20.1+rocm6.2 torchaudio==2.5.1+rocm6.2 \
+  --index-url https://download.pytorch.org/whl/rocm6.2
+
+# 3. ComfyUI
+git clone https://github.com/comfyanonymous/ComfyUI ~/ComfyUI
+cd ~/ComfyUI && pip3 install -r requirements.txt
+pip3 install comfyui-frontend-package==1.52.7   # 如默认前端版本不匹配
+
+# 4. 必需的自定义节点
+cd custom_nodes
+git clone https://github.com/city96/ComfyUI-GGUF
+
+# 5. 启动（gfx1031 必须带 HSA 覆盖）
+export HSA_OVERRIDE_GFX_VERSION=10.3.0
+cd ~/ComfyUI && python3 main.py --fp32-vae
+```
+
 ---
 
-## 二、模型清单（类型与规格，权重不分发）
+## 二、模型清单与下载源
 
 ### 视频生成（本仓库主角）
 
-| 类型 | 文件 | 规格 | 说明 |
-|---|---|---|---|
-| 扩散模型（UNet） | `Wan2.2-TI2V-5B-Q4_K_M.gguf` | 3.2 GB，**GGUF Q4_K_M 量化**，5B 参数 | 文/图生视频一体（TI2V），Apache-2.0 官方权重的量化版 |
-| 扩散模型（UNet） | `wan225bi2vspmixver021n_v21.gguf` | 3.6 GB，GGUF，5B | 社区混剪版（spmix），采样峰值 +0.35G |
-| 文本编码器 | `umt5_xxl_fp8_e4m3fn_scaled.safetensors` | 6.4 GB，**fp8_e4m3fn** | umt5-xxl，挂 CPU 省显存 |
-| VAE | `wan2.2_vae.safetensors` | 1.3 GB，fp16 权重 | **48 通道 latent、16×16×4 压缩**（与 2.1 的 16ch/8× 不通用！） |
-| VAE 备选 | `DR34ML4Y_TI2V_5B_V1.safetensors` | 0.3 GB | 社区修复版 VAE（未深入测试） |
-| 轻量 VAE | `taew2_1.pth` | 22 MB | 快速预览用 |
+| 类型 | 文件 | 规格 | 放置目录 | 常见来源（下载前以仓库实际文件为准） |
+|---|---|---|---|---|
+| 扩散模型 UNet | `Wan2.2-TI2V-5B-Q4_K_M.gguf` | 3.2 GB，**GGUF Q4_K_M 量化**，5B | `models/unet/` | HuggingFace 搜 `Wan2.2-TI2V-5B-GGUF`（QuantStack 等量化仓库）；国内可用 ModelScope 镜像站搜同名 |
+| 扩散模型 UNet | `wan225bi2vspmixver021n_v21.gguf` | 3.6 GB，GGUF，5B 社区混剪版 | `models/unet/` | Civitai / HuggingFace 搜文件名（spmix） |
+| 文本编码器 | `umt5_xxl_fp8_e4m3fn_scaled.safetensors` | 6.4 GB，fp8_e4m3fn | `models/text_encoders/` | HuggingFace `Comfy-Org/Wan_2.2_ComfyUI_Repackaged` |
+| VAE | `wan2.2_vae.safetensors` | 1.3 GB fp16，**48 通道 latent、16×16×4 压缩**（与 2.1 的 16ch/8× 不通用！） | `models/vae/` | 同上 Comfy-Org 仓库 |
+| VAE 备选 | `DR34ML4Y_TI2V_5B_V1.safetensors` | 0.3 GB 社区修复版 | `models/vae/` | 搜文件名（未深入测试） |
+| 轻量 VAE | `taew2_1.pth` | 22 MB 快速预览 | `models/vae_approx/` | Comfy-Org 仓库 |
 
-### 图片生成（环境保留，底模现状见备注）
+### 图片生成（环境保留，底模现状如实标注）
 
 | 类型 | 说明 |
 |---|---|
-| SDXL 系动漫 checkpoint（novaAnimeXL 等） | ⚠️ 当前硬盘上缺失（曾被清理），工作流断链；补回即可用 |
-| Anima 动漫模型（qwen35-anima 节点 + Qwen3-0.6B 编码器 + qwen_image_vae） | 编码器/VAE 在位，checkpoint 缺失 |
+| SDXL 系动漫 checkpoint | ⚠️ 当前硬盘缺失（曾被清理），工作流断链；补回即可用 |
+| Anima 动漫（qwen35-anima 节点 + Qwen3-0.6B 编码器 + qwen_image_vae） | 编码器/VAE 在位，checkpoint 缺失 |
 | Flux2 Klein GGUF fp8 | 缺失 |
-| clip_l / 各类风格 LoRA（SDXL/Illustrious 系，0.1-0.7 GB × 若干） | 在位（LoRA 属个人内容，不在本仓库示例中引用） |
+| clip_l / 各类风格 LoRA（SDXL/Illustrious 系 × 若干） | 在位（LoRA 属个人内容，不在示例中引用） |
 
-**图片侧结论（基于 SDXL 经验+本机实测显存余量）**：fp16 SDXL 在 896×1152 内安全；1024×1536 需配合 tiled VAE 解码。
+图片侧结论（基于 SDXL 经验 + 本机显存余量）：fp16 SDXL 在 896×1152 内安全；1024×1536 需配合 tiled VAE 解码。
 
 ---
 
@@ -113,17 +144,27 @@ cd ~/ComfyUI && python3 main.py --fp32-vae
 
 ### 1. `wan22_t2v_832x480_33f.json` — 文生视频·日常最优档
 
-节点链：`VAELoader → CLIPLoader(cpu) → CLIPTextEncode×2 → UnetLoaderGGUF → Wan22ImageToVideoLatent → KSampler → VAEDecodeTiled → SaveAnimatedWEBP`
+节点链（导入后按此定位参数）：
 
-关键参数：width=832 height=480 **length=33**（帧数必须 4n+1：9/17/33/49/65/81/121）；steps=18 cfg=5.0；VAEDecodeTiled 四项见 TL;DR。
+```
+VAELoader(wan2.2_vae) ─┬─→ Wan22ImageToVideoLatent ──┐
+                       │    width=832 height=480      │
+CLIPLoader(umt5,       │    length=33 ←帧数(4n+1)     │
+  device=cpu!) ─→ CLIPTextEncode×2(正/负提示词) ──→ KSampler ──→ VAEDecodeTiled ──→ SaveAnimatedWEBP
+UnetLoaderGGUF(Q4_K_M)─┘    steps=18 cfg=5.0          128/32/8/4 ←必改!
+                            dpmpp_2m_sde_heun
+                            sgm_uniform
+```
 
-### 2. `wan22_i2v_chain_segment.json` — 尾帧链式延长段
+关键参数三处：**① CLIPLoader 的 device 选 `cpu`**；**② VAEDecodeTiled 四项 = 128/32/8/4**；**③ length 必须 4n+1**（9/17/33/49/65/81/121）。
+
+### 2. `wan22_i2v_chain_segment.json` — 尾帧链式 I2V 延长段
 
 与 1 相同，外加 `LoadImage → Wan22ImageToVideoLatent.start_image`。用法：
-1. 跑完一段，导出其**尾帧**为 PNG，放入 `ComfyUI/input/`（本仓库脚本：PIL 一行 `im.seek(n-1)` 即可）
-2. 该帧作为下一段 `start_image`，生成 33 帧新段（实测峰值 9.3G，4.2 分钟/段）
+1. 跑完一段，导出其**尾帧**为 PNG 放入 `ComfyUI/input/`（PIL 一行：`im.seek(im.n_frames-1)`）
+2. 该帧作为下一段 `start_image`，生成新 33 帧段（实测峰值 9.3G，4.2 分钟/段）
 3. N 段拼接 = 任意时长（PyAV 或剪辑软件）
-4. 稳妥做法：每段 length=36（4n+1 取 33 或 37），裁掉尾部 3-4 帧（社区 wrapper 路径有末帧噪声坑，核心节点路径实测干净，裁掉更保险）
+4. 稳妥做法：每段多生成 3-4 帧并裁掉尾部（社区 wrapper 路径有"末帧噪声"报告；核心节点路径实测干净，裁掉更保险）
 
 ### 3. 直接长生成
 
@@ -133,39 +174,50 @@ cd ~/ComfyUI && python3 main.py --fp32-vae
 
 ## 四、踩坑大全（全部真实踩过）
 
-### 显存/崩溃类
+### 致命级（不处理直接炸，见顶部警告框）
 
-1. **VAEDecodeTiled 默认参数必炸**：512/64/64/8 时单个解码块（512px×64帧 fp32）激活 6.33GB → OOM。唯一可靠参数 `128/32/8/4`（25 组矩阵全过，峰值 2.7-3.4G）。
-2. **untiled 解码直接崩进程**：`VAEDecode`（不切块）在 10G 卡上触发 ROCm 硬崩溃 `Fatal Python error: Aborted / GPU core dump failed`——不是 OOM 异常，ComfyUI 整个死掉。绝对别用。
-3. **fp32 VAE 走低显存加载路径有非确定性**：同参数偶发 OOM（冷启动首测 8.31G 炸、重启后 6.27G 过）。遇到"必过参数突然炸"先重启 ComfyUI。
-4. **ROCm 显存碎片污染**：阶梯测试里连续 OOM 尝试会让后续必过组合假 OOM（720P@81帧 保底参数在 4 次 OOM 后炸、全新状态 2.73G 轻松过）。测试脚本设计要每 N 次失败重启一次。
-5. **`--fp32-vae` 的隐性代价**：VAE 权重 fp32 占 2.7GB（bf16 仅 1.35GB），且 ComfyUI 的显存预估公式（~10.8GB）强制 VAE 进 lowvram 部分加载模式——这就是默认 tile 参数在别处能用、这里炸的根因之一。
+1. **VAEDecodeTiled 默认参数必炸**：512/64/64/8 时单块（512px×64帧 fp32）激活 6.33GB → OOM。唯一可靠 `128/32/8/4`（25 组"分辨率×帧数"矩阵全过，峰值 2.7-3.4G）。
+2. **untiled 解码崩进程**：`VAEDecode` 触发 ROCm 硬崩溃（GPU core dump），不是普通 OOM。
+3. **ROCm 显存碎片污染**：连续 OOM 尝试会让后续必过组合假 OOM（720P@81帧保底参数在 4 次 OOM 后炸、全新状态 2.73G 轻松过）。**遇 OOM 先重启再降参数**。
+4. **fp32 VAE 走低显存加载路径有非确定性**：同参数偶发 OOM（冷启动首测 8.31G 炸、重启后 6.27G 过）。
 
-### 性能/画质类
+### 性能/画质级
 
-6. **bf16 VAE 是权衡不是免费午餐**：输出与 fp32 逐像素一致、激活减半（256px/时序32 可过，4.92G），**但 gfx1031 的 MIOpen conv 路径下 bf16 解码慢 60%**（480P@81帧：199s→321s）。fp32+小tile 仍是默认推荐。
-7. **512px tile 在 fp32/bf16 下都 OOM**；256px 是 bf16 的甜点位（反超 fp32 速度）。
+5. **`--fp32-vae` 的隐性代价**：VAE 权重 fp32 占 2.7GB（bf16 仅 1.35GB），且 ComfyUI 显存预估公式（~10.8GB）强制 VAE 进 lowvram 部分加载——这是默认 tile 参数在别处能用、这里炸的根因之一。
+6. **bf16 VAE 是权衡不是免费午餐**：输出与 fp32 逐像素一致、激活减半（256px/时序32 可过，4.92G），**但 gfx1031 的 MIOpen conv 路径下 bf16 解码慢 60%**（480P@81帧：199s→321s）。fp32+小 tile 仍是默认推荐。
+7. **512px tile 在 fp32/bf16 下都 OOM**；256px 是 bf16 甜点位（反超 fp32 速度）。
 8. **18 步有彩色斑块**（高频区域如草地），35 步干净；步数不影响显存只影响时间。
 9. **tiledvaelite (LTTiledVAEDecode) 输给官方**：同规模 192.7s/7.26G vs 184.6s/4.92G。
-10. **hipBLASLt 警告可忽略**：`Attempting to use hipBLASLt on an unsupported architecture! Overriding blas backend to hipblas`——gfx1031 伪装 gfx1030 的正常回退，不影响结果。
+10. **hipBLASLt 警告可忽略**：`Attempting to use hipBLASLt on an unsupported architecture! Overriding blas backend to hipblas`——gfx1031 伪装 gfx1030 的正常回退。
 
-### 测试方法类（开源脚本里都修掉了）
+### 测试方法级（开源脚本已全部修掉）
 
-11. **裸 SDPA ≠ ComfyUI 实际行为**：独立 benchmark 里 `F.scaled_dot_product_attention` 在 8K token（batch1）就 OOM（math 后端物化 12·N²·4B 的 fp32 注意力矩阵），但 ComfyUI 实测 75K token 只占 ~8.5G——它对 query 做了分块。**别拿裸 torch 的结论吓退自己**。
-12. **0.5s HTTP 轮询漏峰**：`/system_stats` 0.5s 采样把峰值读低 ~1.5GB；改 0.1s 直读 sysfs `mem_info_vram_used` 才是真峰值（driver.py 已实现）。
-13. **ComfyUI 节点缓存会伪造"20 倍提速"**：重复提交完全相同的图（同参数同种子）会命中缓存秒回——曾据此误判 bf16 解码提速 20×，实为缓存命中。**测速必须换种子击穿缓存**。
-14. **端口抢占**：`kill` 旧 ComfyUI 再启新的，若旧进程没死透，新进程会 `Port 8188 already in use` 静默失败，测试全跑在旧配置上——**切换配置后必须验证 `ss -ltn` 归属 + 进程 cmdline**（本仓库测试中就栽过一次，整轮"bf16 数据"实为 fp32）。
-15. `pgrep -f "main.py"` 会匹配到执行它的 shell 自身命令行（自杀）；脚本里用 `pgrep -f "main[.]py"` 括号技巧规避。
-
-### 环境类
-
-16. **无 ffmpeg 二进制**：视频合成用已装的 PyAV（`av` 17.1.0）写 20 行脚本替代 VHS。
-17. **triton 3.8.0 与 torch 2.5.1 不匹配** → torch.compile 路线关闭（升级 torch 又与 ROCm wheel 生态冲突，不值得）。
-18. **RDNA2 无 flash/mem-efficient attention**：SDPA 落 math 后端，靠 ComfyUI 分块续命；不要尝试装 xformers（RDNA2 支持残缺）。
+11. **裸 SDPA ≠ ComfyUI 实际行为**：独立 benchmark 里 `F.scaled_dot_product_attention` 在 8K token（batch1）就 OOM（math 后端物化 12·N²·4B 的 fp32 注意力矩阵），但 ComfyUI 实测 75K token 只占 ~8.5G——**它对 query 做了分块**。别拿裸 torch 的结论吓退自己。
+12. **0.5s HTTP 轮询漏峰**：`/system_stats` 0.5s 采样把峰值读低 ~1.5GB；改 0.1s 直读 sysfs `mem_info_vram_used` 才是真峰值（`scripts/driver.py` 已实现，用法见第六节）。
+13. **ComfyUI 节点缓存会伪造"20 倍提速"**：重复提交完全相同的图（同参数同种子）命中缓存秒回——曾据此误判 bf16 提速 20×，实为缓存命中。**测速必须换种子击穿缓存**。
+14. **端口抢占**：kill 旧 ComfyUI 不彻底时，新进程 `Port 8188 already in use` 静默失败，测试全跑在旧配置上——本仓库测试就栽过一次（整轮"bf16 数据"实为 fp32）。**切换配置后必须验证 `ss -ltn` 归属 + 进程 cmdline**。
+15. **`pgrep -f "main.py"` 会匹配到执行它的 shell 自身**（自杀）；脚本里用 `pgrep -f "main[.]py"` 括号技巧规避。
 
 ---
 
-## 五、耗时曲线（18 步，实测锚点 ◆）
+## 五、已知不可用清单（本机实测/确认，省你试错时间）
+
+| 项目 | 状态 | 原因 |
+|---|---|---|
+| `torch.compile` | ❌ 不可用 | triton 3.8.0 与 torch 2.5.1 版本不匹配；升级 triton 又与 ROCm wheel 生态冲突 |
+| xformers / SageAttention / FlashAttention | ❌ 不可用 | RDNA2（gfx1031）无官方支持，SDPA 落 math 后端（靠 ComfyUI 内部分块救回） |
+| `VAEDecode`（untiled） | ❌ 禁用 | 触发 ROCm 硬崩溃（见踩坑 2） |
+| VAEDecodeTiled 默认参数 | ❌ 禁用 | 必 OOM（见踩坑 1） |
+| tiledvaelite LTTiledVAEDecode | ❌ 不推荐 | 比官方慢且费显存（见踩坑 9） |
+| WanVideoWrapper 直接加载 GGUF | ❌ 不支持 | 需另下其自有格式模型 |
+| SeedVR2 视频超分 | ❌ 排除 | 社区共识需 12GB+ 显存 |
+| comfy-kitchen triton 后端 | ⚠️ 自动禁用 | ImportError 回退，正常 |
+
+---
+
+## 六、耗时曲线与复现
+
+### 耗时曲线（18 步，实测锚点 ◆）
 
 ```
 分钟
@@ -182,7 +234,19 @@ cd ~/ComfyUI && python3 main.py --fp32-vae
 
 公式：`T ≈ 34s(文本编码,CPU) + 步数×步时 + 帧数×2.46s(480P解码)`；步时 ∝ token 数（480P@33帧 ≈ 8.6s，480P@81帧 ≈ 27.5s，121帧 ≈ 40s）。文本编码器挂 GPU 可省 20s/新提示词（编码期峰值 9.1G）。
 
-## 六、目录结构与复现
+### 显存监控脚本用法（`scripts/driver.py`）
+
+```bash
+# 依赖: 运行中的 ComfyUI + python3(numpy/pillow)
+python3 scripts/driver.py scripts/phase1_queue.jsonl
+# 输出追加到 results.jsonl，每行:
+# {id, status: ok/oom/error/timeout, wall_sec, peak_vram_gb,
+#  video:{frames, mean_brightness, black, nan}}
+# 峰值 = 0.1s 间隔直读 /sys/class/drm/card1/device/mem_info_vram_used 的最大值
+# 黑屏判定: 全帧亮度均值 < 3; NaN 判定: 任一帧含 NaN 像素
+```
+
+### 目录结构
 
 ```
 ├── README.md            本文件
@@ -190,21 +254,13 @@ cd ~/ComfyUI && python3 main.py --fp32-vae
 │   ├── SUMMARY.md       完整测试报告（数据表）
 │   └── deepseek-discussion.md  与 DeepSeek 三轮协作分析纪要
 ├── workflows/           可直接导入的工作流 JSON ×2
-├── scripts/             driver.py（API 队列驱动+0.1s 显存监控+黑屏/NaN 检测）
-│                        make_queue.py + 全部测试队列 jsonl
-├── data/                原始测试结果 ~60 条（峰值显存/耗时/像素统计）
+├── scripts/             driver.py + make_queue.py + 全部测试队列 jsonl
+├── data/                原始测试结果 ~60 条
 └── frames/              证据帧：花斑对比、链式衔接验证
-```
-
-```bash
-# 复现单条：导入 workflows/wan22_t2v_832x480_33f.json → Queue Prompt，约 4 分钟
-# 复现批量：python3 scripts/driver.py scripts/phase1_queue.jsonl
-# 数据行格式：{id, status: ok/oom/error/timeout, wall_sec, peak_vram_gb,
-#             video:{frames, mean_brightness, black, nan}}
 ```
 
 ## 声明
 
 - 仓库内示例帧/结果为 AI 生成的普通素材（猫），不含敏感内容
-- 模型权重因体积/版权不随仓库分发，仅列清单与获取指引（HuggingFace 搜对应文件名）
-- 数据为单卡单次实测，不同驱动/内核/版本组合可能有 ±10% 波动；遇到问题先翻"踩坑大全"
+- 模型权重因体积/版权不随仓库分发，仅列清单与获取指引
+- 数据为单卡单次实测，不同驱动/内核/版本组合可能有 ±10% 波动；遇到问题先翻"踩坑大全"与"已知不可用"
