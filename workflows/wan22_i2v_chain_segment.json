@@ -1,0 +1,506 @@
+{
+ "last_node_id": 10,
+ "last_link_id": 11,
+ "nodes": [
+  {
+   "id": 1,
+   "type": "VAELoader",
+   "pos": [
+    40,
+    40
+   ],
+   "size": [
+    260,
+    120
+   ],
+   "flags": {},
+   "order": 1,
+   "mode": 0,
+   "inputs": [],
+   "outputs": [
+    {
+     "name": "out",
+     "type": "VAE",
+     "links": [
+      3,
+      10
+     ],
+     "slot_index": 0
+    }
+   ],
+   "widgets_values": [
+    "wan2.2_vae.safetensors"
+   ],
+   "properties": {
+    "Node name for S&R": "VAELoader"
+   }
+  },
+  {
+   "id": 2,
+   "type": "CLIPLoader",
+   "pos": [
+    40,
+    220
+   ],
+   "size": [
+    260,
+    120
+   ],
+   "flags": {},
+   "order": 2,
+   "mode": 0,
+   "inputs": [],
+   "outputs": [
+    {
+     "name": "out",
+     "type": "CLIP",
+     "links": [
+      1,
+      2
+     ],
+     "slot_index": 0
+    }
+   ],
+   "widgets_values": [
+    "umt5_xxl_fp8_e4m3fn_scaled.safetensors",
+    "wan",
+    "cpu"
+   ],
+   "properties": {
+    "Node name for S&R": "CLIPLoader"
+   }
+  },
+  {
+   "id": 3,
+   "type": "CLIPTextEncode",
+   "pos": [
+    280,
+    120
+   ],
+   "size": [
+    260,
+    120
+   ],
+   "flags": {},
+   "order": 3,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "clip",
+     "type": "CLIP",
+     "link": 1
+    }
+   ],
+   "outputs": [
+    {
+     "name": "out",
+     "type": "CONDITIONING",
+     "links": [
+      6
+     ],
+     "slot_index": 0
+    }
+   ],
+   "widgets_values": [
+    "A cute orange cat walking on green grass in a sunny park, smooth motion, high quality, detailed"
+   ],
+   "properties": {
+    "Node name for S&R": "CLIPTextEncode"
+   }
+  },
+  {
+   "id": 4,
+   "type": "CLIPTextEncode",
+   "pos": [
+    280,
+    320
+   ],
+   "size": [
+    260,
+    120
+   ],
+   "flags": {},
+   "order": 4,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "clip",
+     "type": "CLIP",
+     "link": 2
+    }
+   ],
+   "outputs": [
+    {
+     "name": "out",
+     "type": "CONDITIONING",
+     "links": [
+      7
+     ],
+     "slot_index": 0
+    }
+   ],
+   "widgets_values": [
+    "blurry, low quality, distorted, flickering"
+   ],
+   "properties": {
+    "Node name for S&R": "CLIPTextEncode"
+   }
+  },
+  {
+   "id": 5,
+   "type": "UnetLoaderGGUF",
+   "pos": [
+    40,
+    400
+   ],
+   "size": [
+    260,
+    120
+   ],
+   "flags": {},
+   "order": 5,
+   "mode": 0,
+   "inputs": [],
+   "outputs": [
+    {
+     "name": "out",
+     "type": "MODEL",
+     "links": [
+      5
+     ],
+     "slot_index": 0
+    }
+   ],
+   "widgets_values": [
+    "Wan2.2-TI2V-5B-Q4_K_M.gguf"
+   ],
+   "properties": {
+    "Node name for S&R": "UnetLoaderGGUF"
+   }
+  },
+  {
+   "id": 6,
+   "type": "Wan22ImageToVideoLatent",
+   "pos": [
+    560,
+    60
+   ],
+   "size": [
+    260,
+    120
+   ],
+   "flags": {},
+   "order": 6,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "vae",
+     "type": "VAE",
+     "link": 3
+    },
+    {
+     "name": "start_image",
+     "type": "IMAGE",
+     "link": 4
+    }
+   ],
+   "outputs": [
+    {
+     "name": "out",
+     "type": "LATENT",
+     "links": [
+      8
+     ],
+     "slot_index": 0
+    }
+   ],
+   "widgets_values": [
+    832,
+    480,
+    33,
+    1
+   ],
+   "properties": {
+    "Node name for S&R": "Wan22ImageToVideoLatent"
+   }
+  },
+  {
+   "id": 7,
+   "type": "KSampler",
+   "pos": [
+    820,
+    220
+   ],
+   "size": [
+    260,
+    120
+   ],
+   "flags": {},
+   "order": 7,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "model",
+     "type": "MODEL",
+     "link": 5
+    },
+    {
+     "name": "positive",
+     "type": "CONDITIONING",
+     "link": 6
+    },
+    {
+     "name": "negative",
+     "type": "CONDITIONING",
+     "link": 7
+    },
+    {
+     "name": "latent_image",
+     "type": "LATENT",
+     "link": 8
+    }
+   ],
+   "outputs": [
+    {
+     "name": "out",
+     "type": "LATENT",
+     "links": [
+      9
+     ],
+     "slot_index": 0
+    }
+   ],
+   "widgets_values": [
+    42,
+    "fixed",
+    18,
+    5.0,
+    "dpmpp_2m_sde_heun",
+    "sgm_uniform",
+    1.0
+   ],
+   "properties": {
+    "Node name for S&R": "KSampler"
+   }
+  },
+  {
+   "id": 8,
+   "type": "VAEDecodeTiled",
+   "pos": [
+    1100,
+    120
+   ],
+   "size": [
+    260,
+    120
+   ],
+   "flags": {},
+   "order": 8,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "samples",
+     "type": "LATENT",
+     "link": 9
+    },
+    {
+     "name": "vae",
+     "type": "VAE",
+     "link": 10
+    }
+   ],
+   "outputs": [
+    {
+     "name": "out",
+     "type": "IMAGE",
+     "links": [
+      11
+     ],
+     "slot_index": 0
+    }
+   ],
+   "widgets_values": [
+    128,
+    32,
+    8,
+    4
+   ],
+   "properties": {
+    "Node name for S&R": "VAEDecodeTiled"
+   }
+  },
+  {
+   "id": 9,
+   "type": "SaveAnimatedWEBP",
+   "pos": [
+    1360,
+    120
+   ],
+   "size": [
+    260,
+    120
+   ],
+   "flags": {},
+   "order": 9,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "images",
+     "type": "IMAGE",
+     "link": 11
+    }
+   ],
+   "outputs": [
+    {
+     "name": "out",
+     "type": "IMAGE",
+     "links": [],
+     "slot_index": 0
+    }
+   ],
+   "widgets_values": [
+    "wan22/chain_seg",
+    16.0,
+    false,
+    90,
+    "default"
+   ],
+   "properties": {
+    "Node name for S&R": "SaveAnimatedWEBP"
+   }
+  },
+  {
+   "id": 10,
+   "type": "LoadImage",
+   "pos": [
+    560,
+    360
+   ],
+   "size": [
+    260,
+    120
+   ],
+   "flags": {},
+   "order": 10,
+   "mode": 0,
+   "inputs": [],
+   "outputs": [
+    {
+     "name": "IMAGE",
+     "type": "IMAGE",
+     "links": [
+      4
+     ],
+     "slot_index": 0
+    },
+    {
+     "name": "MASK",
+     "type": "MASK",
+     "links": [],
+     "slot_index": 1
+    }
+   ],
+   "widgets_values": [
+    "chain_seed.png",
+    "chain_seed.png"
+   ],
+   "properties": {
+    "Node name for S&R": "LoadImage"
+   }
+  }
+ ],
+ "links": [
+  [
+   1,
+   2,
+   0,
+   3,
+   0,
+   "CLIP"
+  ],
+  [
+   2,
+   2,
+   0,
+   4,
+   0,
+   "CLIP"
+  ],
+  [
+   3,
+   1,
+   0,
+   6,
+   0,
+   "VAE"
+  ],
+  [
+   4,
+   10,
+   0,
+   6,
+   1,
+   "IMAGE"
+  ],
+  [
+   5,
+   5,
+   0,
+   7,
+   0,
+   "MODEL"
+  ],
+  [
+   6,
+   3,
+   0,
+   7,
+   1,
+   "CONDITIONING"
+  ],
+  [
+   7,
+   4,
+   0,
+   7,
+   2,
+   "CONDITIONING"
+  ],
+  [
+   8,
+   6,
+   0,
+   7,
+   3,
+   "LATENT"
+  ],
+  [
+   9,
+   7,
+   0,
+   8,
+   0,
+   "LATENT"
+  ],
+  [
+   10,
+   1,
+   0,
+   8,
+   1,
+   "VAE"
+  ],
+  [
+   11,
+   8,
+   0,
+   9,
+   0,
+   "IMAGE"
+  ]
+ ],
+ "groups": [],
+ "config": {},
+ "extra": {},
+ "version": 0.4
+}
