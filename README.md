@@ -17,6 +17,7 @@ cd ~/ComfyUI && python3 main.py --fp32-vae
 | VAEDecodeTiled | **tile_size=128 · overlap=32 · temporal_size=8 · temporal_overlap=4** |
 | 文本编码器 | `umt5_xxl_fp8` 挂 **CPU**（CLIPLoader device=cpu） |
 | 实测 | **244.5 秒/条**，采样峰值 **8.2GB / 10GB** |
+| 输出 | **`.webp` 动图**（`SaveAnimatedWEBP`，16fps）——**不是 mp4**，见第六节说明 |
 
 > [!CAUTION]
 > **VAEDecodeTiled 默认参数（512/64/64/8）在这张卡上必 OOM**（单个解码块 fp32 激活 6.33GB；本机 25 组矩阵全炸，未发现例外）。导入任何工作流后第一件事：把 tile 四项改成 `128 / 32 / 8 / 4`。
@@ -210,6 +211,8 @@ UnetLoaderGGUF(Q4_K_M)─┘    steps=18 cfg=5.0          128/32/8/4 ←必改!
 
 关键参数三处：**① CLIPLoader 的 device 选 `cpu`**；**② VAEDecodeTiled 四项 = 128/32/8/4**；**③ length 必须 4n+1**（9/17/33/49/65/81/121）。
 
+输出是 **`.webp` 动图**（`SaveAnimatedWEBP`），不是 mp4——详见第六节"输出格式说明"。
+
 ### 2. `wan22_i2v_chain_segment.json` — 尾帧链式 I2V 延长段
 
 与 1 相同，外加 `LoadImage → Wan22ImageToVideoLatent.start_image`。用法：
@@ -300,6 +303,15 @@ UnetLoaderGGUF(Q4_K_M)─┘    steps=18 cfg=5.0          128/32/8/4 ←必改!
 ```
 
 公式：`T ≈ 34s(文本编码,CPU) + 步数×步时 + 帧数×2.46s(480P解码)`；步时 ∝ token 数（480P@33帧 ≈ 8.6s，480P@81帧 ≈ 27.5s，121帧 ≈ 40s）。文本编码器挂 GPU 可省 20s/新提示词（编码期峰值 9.1G）。
+
+### 📹 输出格式说明（**跑完找不到 mp4 不是失败**）
+
+本仓库工作流最后接的是 **`SaveAnimatedWEBP`**，输出是 **`.webp` 动图**（默认在 `ComfyUI/output/`），**不是 mp4**：
+
+- 为什么用 webp：本机**没有 ffmpeg 二进制**，`SaveAnimatedWEBP` 由 ComfyUI 原生写出，无需编码器依赖。
+- 想要 mp4：① 换成 `SaveWEBM` 节点（ComfyUI 内置，需系统有 ffmpeg）；② 或用已装的 **PyAV**（`av 17.1.0`）把 webp/帧序列转封装成 mp4（本机替代 ffmpeg 的既定方案）；③ 或直接把 webp 丢进剪辑软件。
+- 帧率：工作流默认 `16 fps`（33 帧 ≈ 2 秒播放）；链式 I2V 段按 `24 fps` 生成再拼接。
+- **不要**因为「output 里没有 .mp4」就判定生成失败——去看有没有 `.webp`。
 
 ### 显存监控脚本用法（`scripts/driver.py`）
 
