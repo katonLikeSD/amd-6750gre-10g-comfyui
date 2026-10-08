@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """I2: 1216x1824 with VAEDecodeTiled; K: 1536x1536 untiled. In-process 0.1s VRAM sampling."""
-import glob, json, threading, time, urllib.request
+import glob, json, os, threading, time, urllib.request
 
 API = "http://127.0.0.1:8188"
 samples = []
@@ -73,6 +73,7 @@ stop.set()
 # brightness check of the two new outputs
 from PIL import Image
 import numpy as np
-for f in sorted(glob.glob("/home/jjt/ComfyUI/output/sdxlTest/I2_tiled*.png") + glob.glob("/home/jjt/ComfyUI/output/sdxlTest/K_untiled*.png")):
+for f in sorted(glob.glob(os.path.expanduser("~/ComfyUI/output/sdxlTest/I2_tiled*.png"))
+                + glob.glob(os.path.expanduser("~/ComfyUI/output/sdxlTest/K_untiled*.png"))):
     a = np.asarray(Image.open(f).convert("RGB"), dtype=np.float32)
     print(f"{f.split('/')[-1]}: mean={a.mean():.1f} std={a.std():.1f}")

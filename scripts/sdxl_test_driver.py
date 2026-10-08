@@ -48,7 +48,7 @@ def run(name, w, h, seed, steps, cfg, sampler, sched):
            "seed":seed,"steps":steps,"cfg":cfg,"sampler":sampler,"scheduler":sched,
            "resolution":f"{w}x{h}","outputs":imgs}
     print(json.dumps(rec, ensure_ascii=False))
-    with open("/tmp/comfy_test/results.jsonl","a") as f:
+    with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data", "sdxl_results.jsonl"), "a") as f:
         f.write(json.dumps(rec)+"\n")
 
 if __name__ == "__main__":

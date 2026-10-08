@@ -19,7 +19,7 @@ cd ~/ComfyUI && python3 main.py --fp32-vae
 | 实测 | **244.5 秒/条**，采样峰值 **8.2GB / 10GB** |
 
 > [!CAUTION]
-> **VAEDecodeTiled 默认参数（512/64/64/8）在这张卡上 100% OOM**（单个解码块 fp32 激活 6.33GB）。导入任何工作流后第一件事：把 tile 四项改成 `128 / 32 / 8 / 4`。
+> **VAEDecodeTiled 默认参数（512/64/64/8）在这张卡上必 OOM**（单个解码块 fp32 激活 6.33GB；本机 25 组矩阵全炸，未发现例外）。导入任何工作流后第一件事：把 tile 四项改成 `128 / 32 / 8 / 4`。
 
 > [!CAUTION]
 > **不要用 `VAEDecode`（untiled 整段解码）**——它不是 OOM 报错，而是直接触发 ROCm 硬崩溃（`Fatal Python error: Aborted / GPU core dump failed`），ComfyUI 整个进程死掉。
@@ -148,7 +148,7 @@ curl -s http://127.0.0.1:8188/system_stats | python3 -m json.tool | grep -i vram
 ss -ltnp | grep 8188
 ```
 
-**这三步过了，基本环境就稳了。** 再跑一次 TL;DR 里的视频参数，244.5s 左右出片即完全复现成功。
+**这三步过了，基本环境就稳了。** 再跑一次 TL;DR 里的视频参数，若在 240-250s 出片、峰值 8G 左右，即视为环境复现成功（时序类数字受驱动/内核影响，允许 ±10%）。
 
 ---
 
@@ -313,6 +313,32 @@ python3 scripts/driver.py scripts/phase1_queue.jsonl
 # 黑屏判定: 全帧亮度均值 < 3; NaN 判定: 任一帧含 NaN 像素
 ```
 
+**队列文件（`.jsonl`）格式**——每行一个测试用例，自己写也很简单（生成器见 `scripts/make_queue.py`）：
+
+```json
+{"id": "480p_33f_18s", "width": 832, "height": 480, "frames": 33, "steps": 18, "cfg": 5.0, "sampler": "dpmpp_2m_sde_heun", "scheduler": "sgm_uniform", "seed": 12345, "prompt": "a cat walking in a garden, sunlight", "negative": "lowres, blurry"}
+```
+
+| 字段 | 含义 | 备注 |
+|---|---|---|
+| `id` | 用例名 | 进 results.jsonl 用于对照 |
+| `width`/`height` | 分辨率 | 需为 16 的倍数 |
+| `frames` | 帧数 | **必须 4n+1**（33/49/81/121…） |
+| `steps`/`cfg`/`sampler`/`scheduler` | 采样参数 | 默认档见 TL;DR |
+| `seed` | 种子 | **测速时必须每次不同**（击穿节点缓存，见踩坑 15） |
+| `prompt`/`negative` | 提示词 | 一起喂给两个 CLIPTextEncode |
+
+### 🔧 失败排查决策表（先查这里，再翻 19 条踩坑）
+
+| 症状 | 最可能原因 | 第一步动作 |
+|---|---|---|
+| OOM（显存不足） | ROCm 碎片污染 > 参数真不够 | **先重启 ComfyUI** 用同参数再试一次；还炸再降 `temporal_size`→分辨率 |
+| 进程直接消失/无报错 | untiled `VAEDecode` 触发 ROCm 硬崩溃 | 换 `VAEDecodeTiled` 128/32/8/4（见踩坑 2） |
+| 输出纯黑图 | 形状级静默失败（如 SDXL 1216×1824） | 换邻近 bucket（1152×1728）；**别信 `status=success`**，先验亮度（见踩坑 19） |
+| `torch.version.hip` 是 `None` | torch 被换成了 CUDA/CPU 版 | `--force-reinstall` 重装 rocm wheel（见踩坑 5） |
+| 莫名跑得很慢/参数没生效 | 测试跑在旧 ComfyUI 进程上 | 查 `ss -ltn \| grep 8188` 归属 + 进程 cmdline（见踩坑 16） |
+| LoRA 好像没效果 | GGUF 量化底模上 LoRA 静默打折 | 换 safetensors 底模或离线 merge（见踩坑 12） |
+
 ### 目录结构
 
 ```
@@ -322,8 +348,8 @@ python3 scripts/driver.py scripts/phase1_queue.jsonl
 │   ├── sdxl-novaanimexl-test.md  SDXL 图片生成实测（2026-10-07 新增）
 │   └── deepseek-discussion.md  与 DeepSeek 三轮协作分析纪要
 ├── workflows/           可直接导入的工作流 JSON ×2
-├── scripts/             driver.py + make_queue.py + SDXL 测试驱动/探针 ×4 + 全部测试队列 jsonl
-├── data/                原始测试结果 ~60 条 + sdxl_results.jsonl（20 条）
+├── scripts/             driver.py + make_queue.py + SDXL 测试驱动/探针 ×4 + 全部测试队列 jsonl（原始结果只在 data/）
+├── data/                原始测试结果 jsonl（~140 条，含 sdxl_results.jsonl 20 条）
 └── frames/              证据帧：花斑对比、链式衔接验证、SDXL 成品图 ×5（含黑图证据）
 ```
 
@@ -331,4 +357,6 @@ python3 scripts/driver.py scripts/phase1_queue.jsonl
 
 - 仓库内示例帧/结果为 AI 生成的普通素材（猫、动漫少女风景图），不含敏感内容
 - 模型权重因体积/版权不随仓库分发，仅列清单与获取指引
-- 数据为单卡单次实测，不同驱动/内核/版本组合可能有 ±10% 波动；遇到问题先翻"踩坑大全"与"已知不可用"
+- 数据为**单卡（RX 6750 GRE 10G，gfx1031）+ 上述软件栈**实测；不同驱动/内核/ROCm/MIOpen 版本组合可能有 ±10% 波动，个别结论（如 bf16 解码慢 60%、18 步花斑）是特定版本下的现象，换版本可能反转
+- 大多数配置只跑 1-3 次，**"通过"指当次未失败，不代表长期稳定**；要长期挂机请自行复测
+- 遇到问题先查"失败排查决策表"，再翻"踩坑大全"与"已知不可用"
