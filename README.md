@@ -185,9 +185,13 @@ hf download QuantStack/Wan2.2-TI2V-5B-GGUF Wan2.2-TI2V-5B-Q4_K_M.gguf --local-di
 | Flux2 Klein GGUF fp8 | 缺失 |
 | clip_l / 各类风格 LoRA（SDXL/Illustrious 系 × 若干） | 在位（LoRA 属个人内容，不在示例中引用） |
 
-#### ⚠️ GGUF 模型不带 LoRA 加载能力（如实标注）
+#### ✅ GGUF + LoRA：可用（2026-10-10 实测，修正早前推断）
 
-Wan2.2 用的是 GGUF（`UnetLoaderGGUF`），**ComfyUI 原生 GGUF 加载节点不支持挂 LoRA**（LoRA 对量化权重做 merge 需要原始精度权重）。要用 LoRA 得走社区节点（如 `ComfyUI-GGUF` 的 `UnetLoaderGGUFAdvanced` 或 WanVideoWrapper），或者换非量化 safetensors 底模。**本仓库未实测过 GGUF+LoRA 组合**，不做效果承诺——标在这里是提醒别默认它会像 safetensors 那样直接接 `LoraLoader`。
+Wan2.2 用 GGUF 底模（`UnetLoaderGGUF`）+ 直接接 `LoraLoaderModelOnly` **实测可用**：
+Q4_K_M 基础 GGUF 挂 `Wan22_TI2V_5B_Turbo_lora_rank_64_fp16`（strength 1.0）@4 步生成，
+输出与官方 Turbo 合并模型（同 seed、同参数）**几乎一致**，仅锐度略低（Laplacian 方差 212 vs 251，约 −15%）。
+本机 ComfyUI-GGUF 走 `comfy.lora.calculate_weight` 对量化权重做 patch，**不会静默失效**。
+仍建议：对效果敏感的用途，优先非量化 safetensors 底模或离线 merge。
 
 图片侧结论（**已实测，2026-10-07，novaAnimeXL，18 次生成**）：稳态 ≈1.17s/it @1MP（dpmpp_2m / dpmpp_2m_sde / euler_ancestral 同速，cfg 5/7 同速）；1024² 15步≈20s、30步≈40s；untiled `VAEDecode` 实测到 1536×1536 正常（峰值 9.15GB），1024×1536/1152×1728 均过；batch2 @1024² 安全（8.15GB）。**例外：1216×1824 与 1824×1216 两个标准 bucket 本机必出纯黑**（形状级静默失败，换种子/采样器/tiled 解码均无效，规避用 1152×1728）。原先"896×1152 内安全 / 1024×1536 需 tiled"的经验预测已被实测数据替换，完整矩阵见 [docs/sdxl-novaanimexl-test.md](docs/sdxl-novaanimexl-test.md)。
 
@@ -263,8 +267,9 @@ UnetLoaderGGUF(Q4_K_M)─┘    steps=18 cfg=5.0          128/32/8/4 ←必改!
 9. **18 步有彩色斑块**（高频区域如草地），35 步干净；步数不影响显存只影响时间。
 10. **tiledvaelite (LTTiledVAEDecode) 输给官方**：同规模 192.7s/7.26G vs 184.6s/4.92G。
 11. **hipBLASLt 警告可忽略**：`Attempting to use hipBLASLt on an unsupported architecture! Overriding blas backend to hipblas`——gfx1031 伪装 gfx1030 的正常回退。
-12. **🔴 GGUF 底模挂 LoRA 会静默打折（本机真实踩过）**：GGUF 是量化权重，LoRA 走 `comfy.lora.calculate_weight` 对权重做 patch——在 Q4_K_M 这类量化权重上效果会衰减，且**不报错、不提示**，你只会觉得"这 LoRA 好像没生效/变弱了"。本机实测环境里 `ComfyUI-GGUF` 的 `nodes.py` 只提供 `UnetLoaderGGUF`/`CLIPLoaderGGUF` 系列（无内建 LoRA 合并），Wan2.2 又是 GGUF 底模，两者直接组合会踩。
-    **规避**：① 用 safetensors 非量化底模挂 LoRA（最稳）；② 或在加载时先合并 LoRA 再量化（离线 merge）；③ 或换 `WanVideoWrapper` 等支持 GGUF+LoRA 的节点（未在本机实测，不做效果承诺）。
+12. **🟡 GGUF 底模挂 LoRA：可用，但有轻微质量差（2026-10-10 实测修正）**：量化权重上的 LoRA 走 `comfy.lora.calculate_weight` 做 patch。实测 `Wan2.2-TI2V-5B-Q4_K_M.gguf` + `Wan22_TI2V_5B_Turbo_lora_rank_64_fp16`（strength 1.0）@4 步 4/CFG1/euler/simple，**能复现官方 Turbo 合并模型的效果**（同 seed 输出几乎一致，锐度 −15%）。
+    ⚠️ 早前版本此处写"静默失效/打折到没效果"是**读代码推断、未实测**——已按实测修正。
+    **建议**：① 对质量敏感 → safetensors 非量化底模或离线 merge；② 想省事 → GGUF 直接挂 LoRA 即可（先跑小样验证再全量）。
 
 ### 测试方法级（开源脚本已全部修掉）
 
@@ -291,7 +296,7 @@ UnetLoaderGGUF(Q4_K_M)─┘    steps=18 cfg=5.0          128/32/8/4 ←必改!
 | SeedVR2 视频超分 | ❌ 排除 | 社区共识需 12GB+ 显存 |
 | comfy-kitchen triton 后端 | ⚠️ 自动禁用 | ImportError 回退，正常 |
 | SDXL `1216×1824` / `1824×1216` bucket | ❌ 必出纯黑 | 形状级静默失败（见踩坑 19），SDXL 官方标准桶之一；同比例改用 `1152×1728`（实测正常） |
-| GGUF 底模直接挂 LoRA | ⚠️ 效果打折且无提示 | 量化权重上 patch LoRA 会衰减（见踩坑 12）；改用 safetensors 底模或先 merge |
+| GGUF 底模直接挂 LoRA | ✅ 可用（锐度约 −15%） | 实测可复现官方合并模型效果（见踩坑 12）；质量敏感时改用 safetensors 底模或先 merge |
 | ComfyUI-Manager 自动装/升级 torch | ❌ 严禁 | 会把 ROCm 版换成 CUDA 版（见踩坑 5）；已用 `downgrade_blacklist` + `allow_pip_install=False` 封堵 |
 | `hipBLASLt` 警告 | ⚠️ 可忽略 | gfx1031 伪装 gfx1030 的正常回退（见踩坑 11），不用管 |
 
@@ -361,7 +366,7 @@ python3 scripts/driver.py scripts/phase1_queue.jsonl
 | 输出纯黑图 | 形状级静默失败（如 SDXL 1216×1824） | 换邻近 bucket（1152×1728）；**别信 `status=success`**，先验亮度（见踩坑 19） |
 | `torch.version.hip` 是 `None` | torch 被换成了 CUDA/CPU 版 | `--force-reinstall` 重装 rocm wheel（见踩坑 5） |
 | 莫名跑得很慢/参数没生效 | 测试跑在旧 ComfyUI 进程上 | 查 `ss -ltn \| grep 8188` 归属 + 进程 cmdline（见踩坑 16） |
-| LoRA 好像没效果 | GGUF 量化底模上 LoRA 静默打折 | 换 safetensors 底模或离线 merge（见踩坑 12） |
+| LoRA 好像没效果 | 先用小样对比验证是否真无效果（GGUF+LoRA 已实测可用，见踩坑 12） | 质量敏感时换 safetensors 底模或离线 merge |
 
 ### 目录结构
 
