@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AMD 6750 GRE 10G · 本地视频生成作品集</title>
+<style>
+  :root { --bg:#0e1116; --card:#171b22; --fg:#e6e9ef; --dim:#9aa4b2; --acc:#5aa9ff; --ok:#3ddc84; --warn:#ffcc66; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg);
+         font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif; }
+  header { padding:28px 20px 16px; border-bottom:1px solid #222833; }
+  h1 { margin:0 0 6px; font-size:22px; }
+  .sub { color:var(--dim); font-size:13px; }
+  .wrap { max-width:1080px; margin:0 auto; padding:20px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:18px; }
+  .card { background:var(--card); border:1px solid #232a35; border-radius:12px; overflow:hidden; }
+  .card video { width:100%; display:block; background:#000; aspect-ratio:16/9; }
+  .card .body { padding:12px 14px 14px; }
+  .card h3 { margin:0 0 6px; font-size:16px; }
+  .meta { color:var(--dim); font-size:12.5px; }
+  .meta code { background:#0b0e13; padding:1px 5px; border-radius:4px; color:#cbd5e1; }
+  .tag { display:inline-block; font-size:11.5px; padding:2px 7px; border-radius:999px;
+         background:#12305a; color:#9fd0ff; margin-right:6px; }
+  .tag.g { background:#123a24; color:#8ff0bb; }
+  .tag.y { background:#3a3212; color:#ffe08a; }
+  a.dl { color:var(--acc); text-decoration:none; font-size:13px; }
+  table { width:100%; border-collapse:collapse; font-size:13px; margin-top:10px; }
+  th,td { border-bottom:1px solid #232a35; padding:7px 8px; text-align:left; }
+  th { color:var(--dim); font-weight:500; }
+  section { margin-top:34px; }
+  h2 { font-size:18px; border-left:3px solid var(--acc); padding-left:10px; }
+  .note { background:#141a22; border:1px solid #232a35; border-radius:10px; padding:12px 14px;
+          color:var(--dim); font-size:13px; }
+</style>
+</head>
+<body>
+<header><div class="wrap">
+  <h1>AMD 6750 GRE 10G · 本地视频生成作品集</h1>
+  <div class="sub">Wan2.2 TI2V-5B · ComfyUI 0.37.2 · ROCm · 全部在本机 10G 显存上生成 —— 点击视频可直接播放</div>
+</div></header>
+
+<div class="wrap">
+
+<section>
+  <h2>成片</h2>
+  <div class="grid" id="grid"></div>
+</section>
+
+<section>
+  <h2>速度对比（33 帧 @704×480，同提示词 / seed 42）</h2>
+  <table>
+    <tr><th>配置</th><th>步数</th><th>总耗时</th><th>峰值显存</th></tr>
+    <tr><td>基础 Q4_K_M（dpmpp+sgm）</td><td>30</td><td>374 s</td><td>8.58 G</td></tr>
+    <tr><td>基础 Q4_K_M（euler+simple）</td><td>4</td><td>128 s</td><td>8.76 G</td></tr>
+    <tr><td><b>快步 Turbo Q5_K_S（euler+simple）</b></td><td><b>4</b></td><td><b>146 s</b></td><td>8.62 G</td></tr>
+    <tr><td>快步 Turbo Q5_K_S</td><td>35</td><td>236 s</td><td>8.83 G</td></tr>
+    <tr><td>社区 spmix v21（dpmpp+sgm, cfg5）</td><td>20</td><td>252 s</td><td>9.23 G</td></tr>
+  </table>
+  <div class="note">整段 121 帧 @480p：基础 35 步 <b>1202–1310 s</b>（20–22 min） vs 快步 4 步 <b>388 s</b>（6.5 min）→ <b>约 3.1×</b>。
+  排名靠前不等于更好：快步模型的价值是「4 步可用且不掉画质」。</div>
+</section>
+
+<section>
+  <h2>关键实测结论</h2>
+  <div class="note">
+    <p><span class="tag">接缝</span>链式续写段的接缝像素差 <b>1.4–3.2</b>，段内正常帧间差 12–16 → 衔接比普通帧间更平滑。</p>
+    <p><span class="tag y">硬约束</span>帧数 <b>≥33</b>（17 帧必崩成彩色噪声）；续写段可用深度仅 <b>20–86 帧</b>且浮动；
+       241 帧全链最后约 0.5–1 秒会糊化 → 干净成片需按锐度曲线裁尾 + 重定时。</p>
+    <p><span class="tag g">可用</span>GGUF 底模可直接挂 LoRA（实测复现官方 Turbo 合并模型效果，锐度 −15%）。</p>
+    <p><span class="tag">解码</span>4 步档下瓶颈转为 VAE 瓦片解码（~2.5 s/帧 @480p，~5 s/帧 @720p）。</p>
+  </div>
+</section>
+
+<section>
+  <h2>复现</h2>
+  <div class="note">
+    仓库：<a class="dl" href="https://github.com/katonLikeSD/amd-6750gre-10g-comfyui">github.com/katonLikeSD/amd-6750gre-10g-comfyui</a><br>
+    工作流：<code>workflows/wan22_10s_chain_241f.json</code>（35 步）/ <code>wan22_10s_turbo4step.json</code>（4 步），均已内置 I2V 起始图 + LoRA 模块<br>
+    方法文档：<code>docs/video10s-chain-method.md</code> · 速度对比：<code>docs/wan-speed-comparison.md</code>
+  </div>
+</section>
+
+</div>
+
+<script>
+const items = [
+  { f:"01_cat_10s_clean.mp4", t:"橘猫 · 10 秒 · 干净交付版", d:"175 帧 @17.5fps = 10.000s · 480p · 35 步 · 取干净区间重定时", tags:[["链式 2 段",""],["干净无退化","g"]] },
+  { f:"02_cat_chain_241f.mp4", t:"橘猫 · 链式原始输出", d:"241 帧 @24fps = 10.04s · 480p · 35 步 · 尾段有糊化（方法记录）", tags:[["241 帧",""],["含尾段糊化","y"]] },
+  { f:"03_cat_ext210f.mp4", t:"橘猫 · 扩展版 210 帧", d:"210 帧 @21fps = 10s · 含中段眩光，作对照", tags:[["对照","y"]] },
+  { f:"04_woman_720p_10s.mp4", t:"女性人物 · 10 秒 · 720p", d:"221 帧 @22.1fps = 10.000s · 1280×704 · Turbo 4 步 · 全程干净", tags:[["720p",""],["4 步","g"]] },
+  { f:"05_swim_720p_10s.mp4", t:"泳装 · 10 秒 · 720p", d:"221 帧 @22.1fps = 10.000s · Turbo 4 步", tags:[["720p",""],["4 步","g"]] },
+  { f:"06_woman_480p_10s.mp4", t:"女性人物 · 10 秒 · 480p", d:"174 帧 @17.4fps = 10.000s · 自动定界裁尾版", tags:[["480p",""]] },
+];
+const grid = document.getElementById("grid");
+for (const it of items) {
+  const el = document.createElement("div");
+  el.className = "card";
+  el.innerHTML = `
+    <video controls preload="metadata" playsinline poster="thumbs/${it.f.replace('.mp4','.jpg')}">
+      <source src="videos/${it.f}" type="video/mp4">
+    </video>
+    <div class="body">
+      <h3>${it.t}</h3>
+      <div>${it.tags.map(([x,c])=>`<span class="tag ${c}">${x}</span>`).join("")}</div>
+      <div class="meta">${it.d}</div>
+      <div style="margin-top:8px"><a class="dl" href="videos/${it.f}" download>下载 mp4</a></div>
+    </div>`;
+  grid.appendChild(el);
+}
+</script>
+</body>
+</html>
