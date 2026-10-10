@@ -1,6 +1,6 @@
 {
- "last_node_id": 23,
- "last_link_id": 30,
+ "last_node_id": 25,
+ "last_link_id": 32,
  "nodes": [
   {
    "id": 1,
@@ -22,10 +22,10 @@
      "name": "VAE",
      "type": "VAE",
      "links": [
-      7,
-      13,
+      8,
       15,
-      22
+      17,
+      24
      ],
      "slot_index": 0
     }
@@ -93,8 +93,7 @@
      "name": "MODEL",
      "type": "MODEL",
      "links": [
-      8,
-      17
+      7
      ],
      "slot_index": 0
     }
@@ -107,18 +106,93 @@
    }
   },
   {
+   "id": 25,
+   "type": "LoadImage",
+   "pos": [
+    40,
+    400
+   ],
+   "size": [
+    320,
+    300
+   ],
+   "flags": {},
+   "order": 3,
+   "mode": 0,
+   "inputs": [],
+   "outputs": [
+    {
+     "name": "IMAGE",
+     "type": "IMAGE",
+     "links": [
+      9
+     ],
+     "slot_index": 0
+    }
+   ],
+   "widgets_values": [
+    "example.png",
+    "example.png"
+   ],
+   "properties": {
+    "Node name for S&R": "LoadImage"
+   },
+   "title": "⓪ 起始图（I2V；Ctrl+B 旁路=文生视频）"
+  },
+  {
+   "id": 24,
+   "type": "LoraLoaderModelOnly",
+   "pos": [
+    40,
+    740
+   ],
+   "size": [
+    320,
+    110
+   ],
+   "flags": {},
+   "order": 4,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "model",
+     "type": "MODEL",
+     "link": 7
+    }
+   ],
+   "outputs": [
+    {
+     "name": "MODEL",
+     "type": "MODEL",
+     "links": [
+      10,
+      19
+     ],
+     "slot_index": 0
+    }
+   ],
+   "widgets_values": [
+    "Wan22_TI2V_5B_Turbo_lora_rank_64_fp16.safetensors",
+    0.0
+   ],
+   "properties": {
+    "Node name for S&R": "LoraLoaderModelOnly"
+   },
+   "title": "⓪ LoRA（默认强度 0=不生效；选文件+调强度启用）"
+  },
+  {
    "id": 4,
    "type": "PrimitiveString",
    "pos": [
-    40,
-    420
+    400,
+    60
    ],
    "size": [
     560,
     150
    ],
    "flags": {},
-   "order": 3,
+   "order": 5,
    "mode": 0,
    "inputs": [],
    "outputs": [
@@ -144,15 +218,15 @@
    "id": 5,
    "type": "StringConcatenate",
    "pos": [
-    40,
-    620
+    400,
+    250
    ],
    "size": [
     560,
     110
    ],
    "flags": {},
-   "order": 4,
+   "order": 6,
    "mode": 0,
    "inputs": [
     {
@@ -188,7 +262,7 @@
    "id": 6,
    "type": "CLIPTextEncode",
    "pos": [
-    700,
+    1000,
     60
    ],
    "size": [
@@ -196,7 +270,7 @@
     140
    ],
    "flags": {},
-   "order": 5,
+   "order": 7,
    "mode": 0,
    "inputs": [
     {
@@ -218,7 +292,7 @@
      "name": "CONDITIONING",
      "type": "CONDITIONING",
      "links": [
-      9
+      11
      ],
      "slot_index": 0
     }
@@ -235,7 +309,7 @@
    "id": 7,
    "type": "CLIPTextEncode",
    "pos": [
-    700,
+    1000,
     240
    ],
    "size": [
@@ -243,7 +317,7 @@
     140
    ],
    "flags": {},
-   "order": 6,
+   "order": 8,
    "mode": 0,
    "inputs": [
     {
@@ -257,14 +331,14 @@
      "name": "CONDITIONING",
      "type": "CONDITIONING",
      "links": [
-      10,
-      19
+      12,
+      21
      ],
      "slot_index": 0
     }
    ],
    "widgets_values": [
-    "blurry, low quality, deformed, flickering, watermark, text"
+    "blurry, low quality, deformed, flickering, watermark, text, lens flare, bloom, overexposed, blown highlights, glow, hazy"
    ],
    "properties": {
     "Node name for S&R": "CLIPTextEncode"
@@ -275,7 +349,7 @@
    "id": 8,
    "type": "CLIPTextEncode",
    "pos": [
-    700,
+    1000,
     420
    ],
    "size": [
@@ -283,7 +357,7 @@
     140
    ],
    "flags": {},
-   "order": 7,
+   "order": 9,
    "mode": 0,
    "inputs": [
     {
@@ -305,7 +379,7 @@
      "name": "CONDITIONING",
      "type": "CONDITIONING",
      "links": [
-      18
+      20
      ],
      "slot_index": 0
     }
@@ -322,7 +396,7 @@
    "id": 9,
    "type": "Wan22ImageToVideoLatent",
    "pos": [
-    1100,
+    1380,
     60
    ],
    "size": [
@@ -330,13 +404,18 @@
     130
    ],
    "flags": {},
-   "order": 8,
+   "order": 10,
    "mode": 0,
    "inputs": [
     {
      "name": "vae",
      "type": "VAE",
-     "link": 7
+     "link": 8
+    },
+    {
+     "name": "start_image",
+     "type": "IMAGE",
+     "link": 9
     }
    ],
    "outputs": [
@@ -344,7 +423,7 @@
      "name": "LATENT",
      "type": "LATENT",
      "links": [
-      11
+      13
      ],
      "slot_index": 0
     }
@@ -364,7 +443,7 @@
    "id": 10,
    "type": "KSampler",
    "pos": [
-    1440,
+    1720,
     60
    ],
    "size": [
@@ -372,28 +451,28 @@
     260
    ],
    "flags": {},
-   "order": 9,
+   "order": 11,
    "mode": 0,
    "inputs": [
     {
      "name": "model",
      "type": "MODEL",
-     "link": 8
+     "link": 10
     },
     {
      "name": "positive",
      "type": "CONDITIONING",
-     "link": 9
+     "link": 11
     },
     {
      "name": "negative",
      "type": "CONDITIONING",
-     "link": 10
+     "link": 12
     },
     {
      "name": "latent_image",
      "type": "LATENT",
-     "link": 11
+     "link": 13
     }
    ],
    "outputs": [
@@ -401,7 +480,7 @@
      "name": "LATENT",
      "type": "LATENT",
      "links": [
-      12
+      14
      ],
      "slot_index": 0
     }
@@ -424,7 +503,7 @@
    "id": 11,
    "type": "VAEDecodeTiled",
    "pos": [
-    1780,
+    2060,
     60
    ],
    "size": [
@@ -432,18 +511,18 @@
     130
    ],
    "flags": {},
-   "order": 10,
+   "order": 12,
    "mode": 0,
    "inputs": [
     {
      "name": "samples",
      "type": "LATENT",
-     "link": 12
+     "link": 14
     },
     {
      "name": "vae",
      "type": "VAE",
-     "link": 13
+     "link": 15
     }
    ],
    "outputs": [
@@ -451,9 +530,9 @@
      "name": "IMAGE",
      "type": "IMAGE",
      "links": [
-      14,
-      23,
-      25
+      16,
+      25,
+      27
      ],
      "slot_index": 0
     }
@@ -473,7 +552,7 @@
    "id": 12,
    "type": "ImageFromBatch",
    "pos": [
-    2120,
+    2400,
     60
    ],
    "size": [
@@ -481,13 +560,13 @@
     100
    ],
    "flags": {},
-   "order": 11,
+   "order": 13,
    "mode": 0,
    "inputs": [
     {
      "name": "image",
      "type": "IMAGE",
-     "link": 14
+     "link": 16
     }
    ],
    "outputs": [
@@ -495,7 +574,7 @@
      "name": "IMAGE",
      "type": "IMAGE",
      "links": [
-      16
+      18
      ],
      "slot_index": 0
     }
@@ -513,7 +592,7 @@
    "id": 13,
    "type": "Wan22ImageToVideoLatent",
    "pos": [
-    1100,
+    1380,
     300
    ],
    "size": [
@@ -521,18 +600,18 @@
     130
    ],
    "flags": {},
-   "order": 12,
+   "order": 14,
    "mode": 0,
    "inputs": [
     {
      "name": "vae",
      "type": "VAE",
-     "link": 15
+     "link": 17
     },
     {
      "name": "start_image",
      "type": "IMAGE",
-     "link": 16
+     "link": 18
     }
    ],
    "outputs": [
@@ -540,7 +619,7 @@
      "name": "LATENT",
      "type": "LATENT",
      "links": [
-      20
+      22
      ],
      "slot_index": 0
     }
@@ -560,7 +639,7 @@
    "id": 14,
    "type": "KSampler",
    "pos": [
-    1440,
+    1720,
     300
    ],
    "size": [
@@ -568,28 +647,28 @@
     260
    ],
    "flags": {},
-   "order": 13,
+   "order": 15,
    "mode": 0,
    "inputs": [
     {
      "name": "model",
      "type": "MODEL",
-     "link": 17
+     "link": 19
     },
     {
      "name": "positive",
      "type": "CONDITIONING",
-     "link": 18
+     "link": 20
     },
     {
      "name": "negative",
      "type": "CONDITIONING",
-     "link": 19
+     "link": 21
     },
     {
      "name": "latent_image",
      "type": "LATENT",
-     "link": 20
+     "link": 22
     }
    ],
    "outputs": [
@@ -597,7 +676,7 @@
      "name": "LATENT",
      "type": "LATENT",
      "links": [
-      21
+      23
      ],
      "slot_index": 0
     }
@@ -620,7 +699,7 @@
    "id": 15,
    "type": "VAEDecodeTiled",
    "pos": [
-    1780,
+    2060,
     300
    ],
    "size": [
@@ -628,18 +707,18 @@
     130
    ],
    "flags": {},
-   "order": 14,
+   "order": 16,
    "mode": 0,
    "inputs": [
     {
      "name": "samples",
      "type": "LATENT",
-     "link": 21
+     "link": 23
     },
     {
      "name": "vae",
      "type": "VAE",
-     "link": 22
+     "link": 24
     }
    ],
    "outputs": [
@@ -647,8 +726,8 @@
      "name": "IMAGE",
      "type": "IMAGE",
      "links": [
-      24,
-      26
+      26,
+      28
      ],
      "slot_index": 0
     }
@@ -668,7 +747,7 @@
    "id": 16,
    "type": "SaveAnimatedWEBP",
    "pos": [
-    2120,
+    2400,
     240
    ],
    "size": [
@@ -676,13 +755,13 @@
     130
    ],
    "flags": {},
-   "order": 15,
+   "order": 17,
    "mode": 0,
    "inputs": [
     {
      "name": "images",
      "type": "IMAGE",
-     "link": 23
+     "link": 25
     }
    ],
    "outputs": [
@@ -709,7 +788,7 @@
    "id": 17,
    "type": "SaveAnimatedWEBP",
    "pos": [
-    2120,
+    2400,
     420
    ],
    "size": [
@@ -717,13 +796,13 @@
     130
    ],
    "flags": {},
-   "order": 16,
+   "order": 18,
    "mode": 0,
    "inputs": [
     {
      "name": "images",
      "type": "IMAGE",
-     "link": 24
+     "link": 26
     }
    ],
    "outputs": [
@@ -750,7 +829,7 @@
    "id": 18,
    "type": "ImageFromBatch",
    "pos": [
-    2460,
+    2740,
     60
    ],
    "size": [
@@ -758,13 +837,13 @@
     100
    ],
    "flags": {},
-   "order": 17,
+   "order": 19,
    "mode": 0,
    "inputs": [
     {
      "name": "image",
      "type": "IMAGE",
-     "link": 25
+     "link": 27
     }
    ],
    "outputs": [
@@ -772,7 +851,7 @@
      "name": "IMAGE",
      "type": "IMAGE",
      "links": [
-      27
+      29
      ],
      "slot_index": 0
     }
@@ -790,7 +869,7 @@
    "id": 19,
    "type": "ImageFromBatch",
    "pos": [
-    2460,
+    2740,
     200
    ],
    "size": [
@@ -798,13 +877,13 @@
     100
    ],
    "flags": {},
-   "order": 18,
+   "order": 20,
    "mode": 0,
    "inputs": [
     {
      "name": "image",
      "type": "IMAGE",
-     "link": 26
+     "link": 28
     }
    ],
    "outputs": [
@@ -812,7 +891,7 @@
      "name": "IMAGE",
      "type": "IMAGE",
      "links": [
-      28
+      30
      ],
      "slot_index": 0
     }
@@ -830,7 +909,7 @@
    "id": 20,
    "type": "BatchImagesNode",
    "pos": [
-    2800,
+    3080,
     60
    ],
    "size": [
@@ -838,18 +917,18 @@
     170
    ],
    "flags": {},
-   "order": 19,
+   "order": 21,
    "mode": 0,
    "inputs": [
     {
      "name": "images.image0",
      "type": "IMAGE",
-     "link": 27
+     "link": 29
     },
     {
      "name": "images.image1",
      "type": "IMAGE",
-     "link": 28
+     "link": 30
     },
     {
      "label": "image2",
@@ -864,7 +943,7 @@
      "name": "IMAGE",
      "type": "IMAGE",
      "links": [
-      29
+      31
      ],
      "slot_index": 0
     }
@@ -879,7 +958,7 @@
    "id": 21,
    "type": "CreateVideo",
    "pos": [
-    3120,
+    3400,
     60
    ],
    "size": [
@@ -887,13 +966,13 @@
     100
    ],
    "flags": {},
-   "order": 20,
+   "order": 22,
    "mode": 0,
    "inputs": [
     {
      "name": "images",
      "type": "IMAGE",
-     "link": 29
+     "link": 31
     },
     {
      "name": "audio",
@@ -907,7 +986,7 @@
      "name": "VIDEO",
      "type": "VIDEO",
      "links": [
-      30
+      32
      ],
      "slot_index": 0
     }
@@ -924,7 +1003,7 @@
    "id": 22,
    "type": "SaveVideo",
    "pos": [
-    3420,
+    3700,
     60
    ],
    "size": [
@@ -932,13 +1011,13 @@
     130
    ],
    "flags": {},
-   "order": 21,
+   "order": 23,
    "mode": 0,
    "inputs": [
     {
      "name": "video",
      "type": "VIDEO",
-     "link": 30
+     "link": 32
     }
    ],
    "outputs": [
@@ -963,20 +1042,20 @@
    "id": 23,
    "type": "Note",
    "pos": [
-    40,
-    780
+    400,
+    480
    ],
    "size": [
-    680,
-    300
+    900,
+    320
    ],
    "flags": {},
-   "order": 22,
+   "order": 24,
    "mode": 0,
    "inputs": [],
    "outputs": [],
    "widgets_values": [
-    "【Turbo 4 步版】改「① 主提示词」→ 点运行；4 步 / CFG 1 / euler / simple（模型卡推荐）\n【模型】Wan2_2-TI2V-5B-Turbo-Q5_K_S.gguf（4 步蒸馏，预合并 GGUF，无需 LoRA；\n  HF: hum-ma/Wan2.2-TI2V-5B-Turbo-GGUF，hf-mirror 可下）\n【耗时】约 10-12 分钟出 241 帧（480p：采样 ~1 分钟；瓦片解码 ~6 分钟是瓶颈）\n【输出】output/video10s_ui/：seg1/seg2 无损 webp + short10s_241f mp4\n【注意】241 帧全链的最后约 0.5-1 秒会糊化（5 版实测结论，与模型无关）；\n  要干净成片请按锐度曲线裁掉尾部并重定时（见 docs/video10s-chain-method.md）\n【彩蛋】4 步 Turbo 下 720p(1280x704) 也可行：33 帧 ~4 分钟、峰值 8.75G"
+    "【Turbo 4 步版】4 步 / CFG 1 / euler / simple（模型卡推荐）；Wan2_2-TI2V-5B-Turbo-Q5_K_S.gguf，约 10-12 分钟出 241 帧\n【怎么用】① 改「① 主提示词」（两段共用）→ ② 点运行\n【图生视频】「⓪ 起始图（I2V）」选中你的图 = 第一段从它开始；不想要就选中该节点按 Ctrl+B 旁路 → 回文生视频\n【LoRA】「⓪ LoRA」默认强度 0（不生效）；选文件并把强度调到 1.0 即生效。例：基础模型挂 Turbo LoRA（rank64, 1.0）也能 4 步出片（实测与官方 Turbo 几乎一致）\n【输出】output/video10s_ui/：seg1/seg2 无损 webp + short10s_241f mp4\n【注意】帧数必须 4n+1；241 帧全链尾段可能糊化，干净成片按锐度曲线裁尾+重定时"
    ],
    "properties": {
     "Node name for S&R": "Note"
@@ -1037,6 +1116,14 @@
   ],
   [
    7,
+   3,
+   0,
+   24,
+   0,
+   "MODEL"
+  ],
+  [
+   8,
    1,
    0,
    9,
@@ -1044,15 +1131,23 @@
    "VAE"
   ],
   [
-   8,
-   3,
+   9,
+   25,
+   0,
+   9,
+   1,
+   "IMAGE"
+  ],
+  [
+   10,
+   24,
    0,
    10,
    0,
    "MODEL"
   ],
   [
-   9,
+   11,
    6,
    0,
    10,
@@ -1060,7 +1155,7 @@
    "CONDITIONING"
   ],
   [
-   10,
+   12,
    7,
    0,
    10,
@@ -1068,7 +1163,7 @@
    "CONDITIONING"
   ],
   [
-   11,
+   13,
    9,
    0,
    10,
@@ -1076,7 +1171,7 @@
    "LATENT"
   ],
   [
-   12,
+   14,
    10,
    0,
    11,
@@ -1084,31 +1179,31 @@
    "LATENT"
   ],
   [
-   13,
-   1,
-   0,
-   11,
-   1,
-   "VAE"
-  ],
-  [
-   14,
-   11,
-   0,
-   12,
-   0,
-   "IMAGE"
-  ],
-  [
    15,
    1,
    0,
-   13,
-   0,
+   11,
+   1,
    "VAE"
   ],
   [
    16,
+   11,
+   0,
+   12,
+   0,
+   "IMAGE"
+  ],
+  [
+   17,
+   1,
+   0,
+   13,
+   0,
+   "VAE"
+  ],
+  [
+   18,
    12,
    0,
    13,
@@ -1116,15 +1211,15 @@
    "IMAGE"
   ],
   [
-   17,
-   3,
+   19,
+   24,
    0,
    14,
    0,
    "MODEL"
   ],
   [
-   18,
+   20,
    8,
    0,
    14,
@@ -1132,7 +1227,7 @@
    "CONDITIONING"
   ],
   [
-   19,
+   21,
    7,
    0,
    14,
@@ -1140,7 +1235,7 @@
    "CONDITIONING"
   ],
   [
-   20,
+   22,
    13,
    0,
    14,
@@ -1148,7 +1243,7 @@
    "LATENT"
   ],
   [
-   21,
+   23,
    14,
    0,
    15,
@@ -1156,7 +1251,7 @@
    "LATENT"
   ],
   [
-   22,
+   24,
    1,
    0,
    15,
@@ -1164,7 +1259,7 @@
    "VAE"
   ],
   [
-   23,
+   25,
    11,
    0,
    16,
@@ -1172,7 +1267,7 @@
    "IMAGE"
   ],
   [
-   24,
+   26,
    15,
    0,
    17,
@@ -1180,7 +1275,7 @@
    "IMAGE"
   ],
   [
-   25,
+   27,
    11,
    0,
    18,
@@ -1188,7 +1283,7 @@
    "IMAGE"
   ],
   [
-   26,
+   28,
    15,
    0,
    19,
@@ -1196,7 +1291,7 @@
    "IMAGE"
   ],
   [
-   27,
+   29,
    18,
    0,
    20,
@@ -1204,7 +1299,7 @@
    "IMAGE"
   ],
   [
-   28,
+   30,
    19,
    0,
    20,
@@ -1212,7 +1307,7 @@
    "IMAGE"
   ],
   [
-   29,
+   31,
    20,
    0,
    21,
@@ -1220,7 +1315,7 @@
    "IMAGE"
   ],
   [
-   30,
+   32,
    21,
    0,
    22,
