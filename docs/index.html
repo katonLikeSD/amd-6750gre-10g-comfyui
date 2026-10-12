@@ -68,6 +68,8 @@
     <p><span class="tag y">硬约束</span>帧数 <b>≥33</b>（17 帧必崩成彩色噪声）；续写段可用深度仅 <b>20–86 帧</b>且浮动；
        241 帧全链最后约 0.5–1 秒会糊化 → 干净成片需按锐度曲线裁尾 + 重定时。</p>
     <p><span class="tag g">可用</span>GGUF 底模可直接挂 LoRA（实测复现官方 Turbo 合并模型效果，锐度 −15%）。</p>
+    <p><span class="tag g">4 步必挂 LoRA</span>spmix 走 4 步时 <b>必须</b>挂 Turbo LoRA：锐度是不挂的 <b>5–10 倍</b>（119–172 vs 13–27）；4 步裸跑只是欠去噪的软图。</p>
+    <p><span class="tag y">闪烁</span>固定镜头静止场景的帧间差中位 4.8–7.5；无 LoRA 版更稳，LoRA 版更锐但更"AI 光泽"。对策：无 LoRA / 时域平滑补帧 / 降分辨率加步数。<b>待解问题，如实标注。</b></p>
     <p><span class="tag">解码</span>4 步档下瓶颈转为 VAE 瓦片解码（~2.5 s/帧 @480p，~5 s/帧 @720p）。</p>
   </div>
 </section>
@@ -91,7 +93,9 @@ const items = [
   { f:"04_woman_720p_10s.mp4", t:"女性人物 · 10 秒 · 720p", d:"221 帧 @22.1fps = 10.000s · 1280×704 · Turbo 4 步 · 全程干净", tags:[["720p",""],["4 步","g"]] },
   { f:"05_swim_720p_10s.mp4", t:"泳装 · 10 秒 · 720p", d:"221 帧 @22.1fps = 10.000s · Turbo 4 步", tags:[["720p",""],["4 步","g"]] },
   { f:"06_woman_480p_10s.mp4", t:"女性人物 · 10 秒 · 480p", d:"174 帧 @17.4fps = 10.000s · 自动定界裁尾版", tags:[["480p",""]] },
-];
+  { f:"07_room_lingerie_4step_no_lora.mp4", t:"房间·情趣内衣 · 4 步 · 无 LoRA", d:"121 帧 @24fps = 5.04s · 720p · 固定镜头静止展示 · 画面偏软但更自然", tags:[["固定镜头",""],["无 LoRA","y"]] },
+  { f:"08_room_lingerie_4step_turbo_lora.mp4", t:"房间·情趣内衣 · 4 步 · Turbo LoRA 1.0", d:"121 帧 @24fps = 5.04s · 720p · 同提示词同 seed · 锐度 5-10 倍于无 LoRA", tags:[["固定镜头",""],["+Turbo LoRA","g"]] },
+]
 const grid = document.getElementById("grid");
 for (const it of items) {
   const el = document.createElement("div");
