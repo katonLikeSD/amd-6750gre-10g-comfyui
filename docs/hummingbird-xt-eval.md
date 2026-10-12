@@ -28,8 +28,8 @@
 
 **轻量 VAE 为什么不能直接用**：权重是新架构——`mid_block.resnets.*.depthwise_conv.weight [512,1,5,5,5]`（3D DW Conv），
 共 106/134 个张量；而官方 `wan2.2_vae.safetensors` 是 196 张量的旧架构（`decoder.conv1.*`）。
-**层结构不同 → ComfyUI 的 VAE 类无法加载**。（已下载留档：`models/vae/wan22_v3_tiling16_12.safetensors`、
-`wan22_v1_tiling16_12.safetensors`）
+**层结构不同 → ComfyUI 的 VAE 类无法加载**。（2026-10-12 曾下载验证后**为省磁盘已删除**，需要时重下：
+  `curl -L -o wan22_v3.safetensors https://hf-mirror.com/amd/HummingbirdXT/resolve/main/vae/wan22_v3_tiling_16_12/diffusion_pytorch_model.safetensors`）
 
 ## 三、结论与后续路线
 
