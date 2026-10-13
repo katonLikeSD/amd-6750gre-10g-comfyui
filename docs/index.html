@@ -69,8 +69,8 @@
        241 帧全链最后约 0.5–1 秒会糊化 → 干净成片需按锐度曲线裁尾 + 重定时。</p>
     <p><span class="tag g">可用</span>GGUF 底模可直接挂 LoRA（实测复现官方 Turbo 合并模型效果，锐度 −15%）。</p>
     <p><span class="tag g">4 步必挂 LoRA</span>spmix 走 4 步时 <b>必须</b>挂 Turbo LoRA：锐度是不挂的 <b>5–10 倍</b>（119–172 vs 13–27）；4 步裸跑只是欠去噪的软图。</p>
-    <p><span class="tag y">闪烁</span>固定镜头静止场景的帧间差中位 4.8–7.5；无 LoRA 版更稳，LoRA 版更锐但更"AI 光泽"。对策：无 LoRA / 时域平滑补帧 / 降分辨率加步数。<b>待解问题，如实标注。</b></p>
-    <p><span class="tag g">闪烁推荐配置</span><b>LoRA 1.0 + ModelSamplingSD3 shift=3 + TemporalSmoothingLite(k5, σ1.0, strength 0.5)</b> —— 实测 抖动 4.29 / 锐度 37，全面优于"不挂 LoRA"（4.81 / 27）。强度曲线：0.5 抖 −24%｜0.7 抖 −33%｜1.0 抖 −46%（锐度同步下降，属硬权衡）。详见 <code>docs/flicker-fix-test.md</code></p>
+    <p><span class="tag y">闪烁</span>固定镜头静止场景的帧间差中位 4.8–7.5；LoRA 版更锐但更"AI 光泽"。缓解手段：shift=3 + 时域平滑（推荐配置见下）。"关 LoRA"以软换稳，实测被平滑方案在两条轴上全面压过。<b>属缓解而非根治，如实标注。</b></p>
+    <p><span class="tag g">闪烁推荐配置</span><b>LoRA 1.0 + ModelSamplingSD3 shift=3 + TemporalSmoothingLite(k5, σ1.0, strength 0.5)</b> —— 实测 抖动 4.29 / 锐度 37，全面优于"不挂 LoRA"（4.81 / 27）。强度曲线：0.3 抖 −15%（最保锐度）｜0.5 抖 −24%｜0.7 抖 −33%｜1.0 抖 −46%（锐度同步下降，属硬权衡）。详见 <code>docs/flicker-fix-test.md</code></p>
     <p><span class="tag">解码</span>4 步档下瓶颈转为 VAE 瓦片解码（~2.5 s/帧 @480p，~5 s/帧 @720p）。</p>
   <p><span class="tag">Hummingbird-XT</span>AMD 官方，Wan2.2-5B 蒸馏 + 轻量 VAE（解码 14×/显存 4×）；官方目标 RDNA4，本机 RDNA2 属未支持配置，主权重 9.5GB 放不下 → 仅轻量 VAE 值得移植。详见 <code>docs/hummingbird-xt-eval.md</code></p>
     </div>
