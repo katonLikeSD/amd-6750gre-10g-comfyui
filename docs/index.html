@@ -37,7 +37,7 @@
 <body>
 <header><div class="wrap">
   <h1>AMD 6750 GRE 10G · 本地视频生成作品集</h1>
-  <div class="sub">Wan2.2 TI2V-5B · ComfyUI 0.37.2 · ROCm · 全部在本机 10G 显存上生成 —— 点击视频可直接播放</div>
+  <div class="sub">Wan2.2 TI2V-5B · MiniMax H3 · ComfyUI · ROCm · 全部在本机 10G 显存上生成 —— 点击视频可直接播放</div>
 </div></header>
 
 <div class="wrap">
@@ -77,6 +77,25 @@
 </section>
 
 <section>
+  <h2>MiniMax H3（2026-10-15 新部署）</h2>
+  <table>
+    <tr><th>配置（576×320 · 124 帧 · 5.2s · 含音频）</th><th>步数</th><th>总耗时</th><th>采样</th></tr>
+    <tr><td>4step Turbo LoRA（提速档，推荐）</td><td>4</td><td><b>256 s</b></td><td>4 × 47.8 s</td></tr>
+    <tr><td>8step Turbo LoRA（画质档）</td><td>6</td><td>390 s</td><td>6 × 32.8 s</td></tr>
+    <tr><td>小样 384×256</td><td>6</td><td>270 s</td><td>6 × 32.8 s</td></tr>
+    <tr><td>864×480（超显存 → 权重流式抖动）</td><td>8</td><td colspan="2">≈13 min/步，不可用（已中断）</td></tr>
+  </table>
+  <div class="note">
+    <p><span class="tag g">可用</span>10G 显存跑 21GB INT8 主模型（convrot_w4a4 原生内核）+ 15.7GB 文本编码器：需 <b>D 盘 124 GB 页面文件</b> + <code>HSA_OVERRIDE_GFX_VERSION=10.3.0</code>（RDNA2 必需）</p>
+    <p><span class="tag">甜点</span>分辨率是最大杠杆，但上限 ≈ <b>576×320</b>；864×480 直接跌入"权重逐层重载"抖动区（~13 min/步）。4 步 LoRA 相对 6 步 <b>1.52×</b>（步数减半、单步 47.8 s 变慢，净提速）</p>
+    <p><span class="tag y">踩坑</span>博主工作流 JSON 存在共享 link 序列化缺陷（<code>BasicScheduler.model</code> / <code>VAEDecodeAudio.samples</code> 断线 → <code>Required input is missing</code>），已全部修复并附修复方法</p>
+    <p><span class="tag">编码</span>SaveVideo 改 <code>mp4 + h264 + re-encode + crf 14</code>（默认 auto 约 0.85 Mbps，糊感一部分来自编码）</p>
+    <p><b>画质流水线（2026-10-15 晚）</b>：超分（UltraSharp/Remacri/x4plus 三模型对比）→ 时域EMA防抖（帧间差 1.68→1.33）→ RIFE 插帧 48fps；<b>先防抖再超分</b>（超分放大帧间噪声）；提示词"locked-off + Pre-Act Lead-In"可额外降抖 11%；<b>构图=免费分辨率</b>（特写脸 200px vs 全身 60px）。SeedVR2 3B 视频原生超分已本地化中。</p>
+    <p>完整实录与复现步骤见 <a class="dl" href="h3-deployment.md">docs/h3-deployment.md</a> · 画质流水线详见 <a class="dl" href="h3-quality-pipeline.md">docs/h3-quality-pipeline.md</a></p>
+  </div>
+</section>
+
+<section>
   <h2>复现</h2>
   <div class="note">
     仓库：<a class="dl" href="https://github.com/katonLikeSD/amd-6750gre-10g-comfyui">github.com/katonLikeSD/amd-6750gre-10g-comfyui</a><br>
@@ -89,6 +108,11 @@
 
 <script>
 const items = [
+  { f:"H3_static_ultimate_2x_48fps.mp4", t:"静止人物 · H3 全链路终极版（超分+防抖+插帧）", d:"1152×640 @48fps · EMA防抖→Remacri×4→×2→RIFE 124→248帧 · 全链路 95 s", tags:[["超分+插帧","g"],["EMA 防抖","g"],["48fps","g"]] },
+  { f:"H3_closeup_up2x_remacri.mp4", t:"特写构图 + Remacri 超分 ×2", d:"576×320 → 1152×640 · 特写构图让脸部像素 ×11 · 再超分精修", tags:[["特写构图","g"],["Remacri",""]] },
+  { f:"H3_dance.mp4", t:"美女跳舞 · MiniMax H3（2026-10）", d:"124 帧 @24fps = 5.17s · 576×320 · 4 步 Turbo LoRA · 含音频 · 256 s 生成", tags:[["MiniMax H3",""],["4 步提速","g"],["含音频","g"]] },
+  { f:"H3_4step_test.mp4", t:"H3 4步提速测试 · 雪林（同提示词/seed）", d:"6 步 390 s → 4 步 256 s（1.52×）· 576×320 · 含音频", tags:[["MiniMax H3",""],["提速 1.52×","g"]] },
+  { f:"H3_test.mp4", t:"H3 稳定档 · 雪林", d:"124 帧 @24fps = 5.17s · 576×320 · 8step LoRA @6 步 · 390 s · 含音频", tags:[["MiniMax H3",""],["画质档",""]] },
   { f:"01_cat_10s_clean.mp4", t:"橘猫 · 10 秒 · 干净交付版", d:"175 帧 @17.5fps = 10.000s · 480p · 35 步 · 取干净区间重定时", tags:[["链式 2 段",""],["干净无退化","g"]] },
   { f:"02_cat_chain_241f.mp4", t:"橘猫 · 链式原始输出", d:"241 帧 @24fps = 10.04s · 480p · 35 步 · 尾段有糊化（方法记录）", tags:[["241 帧",""],["含尾段糊化","y"]] },
   { f:"03_cat_ext210f.mp4", t:"橘猫 · 扩展版 210 帧", d:"210 帧 @21fps = 10s · 含中段眩光，作对照", tags:[["对照","y"]] },

@@ -36,6 +36,20 @@ cd ~/ComfyUI && python3 main.py --fp32-vae
 
 ---
 
+## 附：MiniMax H3（2026-10-15 补测，同一张 10G 卡）
+
+| 项 | 值 |
+|---|---|
+| 可行档 | **576×320 @124 帧（5s 含音频）**：4step Turbo LoRA **256 s**；8step LoRA @6 步 390 s |
+| 死限 | 864×480 @8 步 → 显存超限权重流式抖动 ≈13 min/步（不可用） |
+| 环境 | patientx-cfz/comfyui-rocm（ROCm 10.1 + torch 2.14）+ `HSA_OVERRIDE_GFX_VERSION=10.3.0` + D: 124 GB 页面文件 |
+| 模型 | Comfy-Org/MiniMax-H3 共 7 文件 68 GB（ModelScope 镜像），全部 SHA256 校验通过 |
+
+工作流（已修复原 JSON 的共享 link 断线缺陷）：`workflows/h3_t2v_576x320_6step_api.json` · `workflows/h3_dance_4step_api.json`
+详见 [docs/h3-deployment.md](docs/h3-deployment.md)（断线修复 + 实测数据）· 画质增强流水线（超分/防抖/插帧）见 [docs/h3-quality-pipeline.md](docs/h3-quality-pipeline.md)。
+
+---
+
 ## 一、完整环境（逐项版本）
 
 ### 硬件
